@@ -16,7 +16,7 @@ parse_downloadurl <- function(download_url) {
   
   file_name <- query[[2]]
   code <- query[[5]]
-  url <- sprintf("https://www.ausstats.abs.gov.au/ausstats/meisubs.nsf/0/%s/$File/%s",
+  url <- sprintf("https://www.abs.gov.au/ausstats/meisubs.nsf/0/%s/$File/%s",
                  code,
                  file_name)
   list(file_name=file_name,
