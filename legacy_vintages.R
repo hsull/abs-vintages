@@ -13,10 +13,12 @@ clean_name <- function(name) {
 parse_downloadurl <- function(download_url) {
   parsed_url <- httr2::url_parse(download_url)
   query <- names(parsed_url$query)
+  sub_section <- stringr::str_split(parsed_url$path, "/")[[1]][[3]]
   
   file_name <- query[[2]]
   code <- query[[5]]
-  url <- sprintf("https://www.abs.gov.au/ausstats/meisubs.nsf/0/%s/$File/%s",
+  url <- sprintf("https://www.abs.gov.au/ausstats/%s/0/%s/$File/%s",
+                 sub_section,
                  code,
                  file_name)
   list(file_name=file_name,
