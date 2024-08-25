@@ -1,64 +1,43 @@
 library(xml2)
 library(httr2)
 
-get_url <- function(vintage_date, release_id) {
-  month <- format(vintage_date, "%b") |> as.character()
-  year <- format(vintage_date, "%Y") |> as.character()
-  url <-paste0("https://www.abs.gov.au/AUSSTATS/abs@.nsf/DetailsPage/", 
-               release_id, month, "%20",year, "?OpenDocument")
-  url
+get_files_for_vintage <- function(vintage_date, cat_no) {
+  if (vintage_date >= as.Date("2019-06-01")) {
+    stop("Vintages past June 2019 are not supported. You can use the readabs 
+         package to download and read these.")
+  } else {
+    file_data <- get_files_for_vintage_legacy(vintage_date, cat_no)
+  }
+  file_data  
 }
-
-clean_name <- function(name) {
-  stringr::str_remove_all(name, "[\\t\\.]")
-}
-
-parse_downloadurl <- function(download_url) {
-  parsed_url <- httr2::url_parse(download_url)
-  query <- names(parsed_url$query)
-  
-  file_name <- query[[2]]
-  code <- query[[5]]
-  url <- sprintf("https://www.ausstats.abs.gov.au/ausstats/meisubs.nsf/0/%s/$File/%s",
-                 code,
-                 file_name)
-  list(file_name=file_name,
-       url=url,
-       ext=tools::file_ext(file_name))
-}
-
-parse_listentry <- function(listentry) {
-  name <- listentry |> 
-    html_text2() |> 
-    clean_name()
-  
-  href <- listentry |> 
-    html_element("a") |> 
-    html_attr("href")
-  
-  parsed <- sprintf("https://www.ausstats.abs.gov.au%s", href) |> 
-    parse_downloadurl()
-  
-  return(data.frame(Name=name, Link=parsed$url, FileName=parsed$file_name,
-                    FileType=parsed$ext))
-}
-
-#' @param data data frame containing files.
-#' @param download_dir directory to download the files to. 
-download_files <- function(data, download_dir="./") {
-  purrr::map2(data$FileName, data$Link, function(name,link) download.file(link, paste0(download_dir, "/", name), mode = "wb"))
-  # mode = wb needed for windows
-}
-
 
 # Main Function -----------------------------------------------------------
-get_files <- function(vintage_date, publication_id) {
-  url <- get_url(vintage_date, publication_id)
-  html <- read_html(url)
-  list_entries <- html |> 
-    html_elements("#mainpane") |> 
-    html_elements(".listentry") 
-  file_data <- purrr::map(list_entries, function(x) parse_listentry(x)) |> 
+get_files <- function(vintage_dates, cat_no) {
+  purrr::map(vintage_dates, purrr::partial(get_files_for_vintage, 
+                                           cat_no=cat_no)) |>
     dplyr::bind_rows()
-  file_data
+  
+}
+
+
+read_absfile <- function(vintage_date, cat_no, download_dir) {
+  path <- sprintf("%s/%s", download_dir, vintage_date)
+  read_absfile_ <- function() {
+      readabs::read_abs_local(cat_no=cat_no, path = path) |>
+      dplyr::mutate(vintage=vintage_date)
+  }
+  
+  onError <- function(e) {
+    print(sprintf("Unable to read %s", path))
+    NULL
+  }
+  
+  tryCatch(read_absfile_(), error=onError)
+} 
+
+#' 
+#' Assumes the files are downloaded using the default parameters for download_absfiles.
+read_absfiles <- function(vintage_dates, cat_no, download_dir) {
+  purrr::map(vintage_dates, purrr::partial(read_absfile, cat_no=cat_no, download_dir=download_dir)) |>
+    dplyr::bind_rows()
 }
